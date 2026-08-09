@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Dizi Takip</string>
+    <string name="title_activity_main">Dizi Takip</string>
+    <string name="package_name">com.dizitakip.app</string>
+    <string name="custom_url_scheme">com.dizitakip.app</string>
+</resources>
