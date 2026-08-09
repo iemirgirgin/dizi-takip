@@ -39,6 +39,7 @@ export default function Dashboard() {
   const [markingEpisode, setMarkingEpisode] = useState<string | null>(null);
   const [pendingNotes, setPendingNotes] = useState<Record<string, string>>({});
   const [savingNote, setSavingNote] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   // List search & sort
   const [listSearch, setListSearch] = useState("");
@@ -71,6 +72,14 @@ export default function Dashboard() {
   // Fetch user's shows and calculate next episodes
   const fetchMyShows = useCallback(async () => {
     if (!user) return;
+
+    // 0. Fetch profile for display name
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .single();
+    if (profileData?.display_name) setDisplayName(profileData.display_name);
     
     // 1. Fetch user shows and watched episodes concurrently
     const [showsRes, watchedRes] = await Promise.all([
@@ -342,7 +351,15 @@ export default function Dashboard() {
               Takvim
             </Link>
             <div className="w-px h-4 bg-zinc-800 hidden sm:block"></div>
-            <span className="text-xs font-medium text-zinc-500 hidden sm:block">{user?.email}</span>
+            <Link
+              href="/dashboard/settings"
+              className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-amber-500 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              {displayName ?? user?.email}
+            </Link>
             <button
               onClick={handleLogout}
               className="text-sm font-medium text-zinc-400 hover:text-rose-500 transition-colors ml-2"

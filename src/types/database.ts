@@ -1,5 +1,12 @@
 export type ShowStatus = "watching" | "completed" | "dropped";
 
+export interface Profile {
+  id: string;
+  display_name: string | null;
+  created_at: string;
+}
+
+
 export interface Show {
   id: string;
   tvmaze_id: number;
