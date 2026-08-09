@@ -349,7 +349,7 @@ export default function ShowDetailPage() {
                   {/* Season header */}
                   <button
                     onClick={() => setOpenSeason(isOpen ? null : seasonNum)}
-                    className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-zinc-800/50 transition-colors text-left group cursor-pointer"
+                    className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-zinc-800/50 transition-colors text-left group cursor-pointer touch-manipulation"
                   >
                     <div className="flex items-center gap-4">
                       <span className="font-bold text-zinc-100 text-lg group-hover:text-amber-500 transition-colors">
@@ -377,13 +377,13 @@ export default function ShowDetailPage() {
                     <div className="border-t border-zinc-800/80 bg-zinc-950/50">
                       {/* Mark all button */}
                       {seasonWatched < episodes.length && (
-                        <div className="p-3 px-4 sm:px-5 border-b border-zinc-800/60 flex items-center justify-between bg-zinc-900/30">
+                        <div className="p-2 sm:p-3 px-4 sm:px-5 border-b border-zinc-800/60 flex items-center justify-between bg-zinc-900/30">
                           <span className="text-xs font-bold tracking-wider text-zinc-500 uppercase hidden sm:inline">
                             Kalan: {episodes.length - seasonWatched} bölüm
                           </span>
                           <button
                             onClick={() => markSeasonWatched(seasonNum)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold tracking-wide text-amber-500 hover:bg-amber-500/10 transition-colors cursor-pointer ml-auto"
+                            className="inline-flex items-center justify-center gap-1.5 px-4 min-h-[44px] rounded text-xs font-bold tracking-wide text-amber-500 hover:bg-amber-500/10 transition-colors cursor-pointer ml-auto touch-manipulation"
                           >
                             TÜM SEZONU İŞARETLE
                           </button>
@@ -400,26 +400,28 @@ export default function ShowDetailPage() {
                             return (
                               <div
                                 key={key}
-                                className={`flex items-center gap-4 p-3.5 sm:px-5 transition-colors duration-150 ${
+                                className={`flex items-center gap-2 sm:gap-4 p-2 sm:p-3.5 sm:px-5 transition-colors duration-150 ${
                                   isWatched ? "bg-rose-500/5" : "hover:bg-zinc-800/30"
                                 }`}
                               >
                                 <button
                                   onClick={() => toggleEpisode(ep.season, ep.number)}
                                   disabled={isToggling}
-                                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs transition-all duration-300 flex-shrink-0 cursor-pointer ${
+                                  className="relative w-12 h-12 flex items-center justify-center flex-shrink-0 cursor-pointer group/btn"
+                                >
+                                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs transition-all duration-300 ${
                                     isWatched
                                       ? "bg-amber-500 border-amber-500 text-zinc-950"
-                                      : "border-zinc-600 text-transparent hover:border-amber-500"
-                                  } disabled:opacity-50`}
-                                >
-                                  {isWatched ? (
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={4} viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  ) : null}
+                                      : "border-zinc-600 text-transparent group-hover/btn:border-amber-500"
+                                  } ${isToggling ? "opacity-50 pointer-events-none" : ""}`}>
+                                    {isWatched ? (
+                                      <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={4} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    ) : null}
+                                  </div>
                                 </button>
-                                <div className="flex-1 min-w-0">
+                                <div className="flex-1 min-w-0 py-1">
                                   <p
                                     className={`text-sm font-semibold truncate transition-colors ${
                                       isWatched ? "text-zinc-500 line-through decoration-zinc-700" : "text-zinc-200"
@@ -427,7 +429,7 @@ export default function ShowDetailPage() {
                                   >
                                     {ep.number}. {ep.name}
                                   </p>
-                                  <p className="text-xs text-zinc-600 mt-0.5 font-medium">
+                                  <p className="text-xs text-zinc-600 mt-0.5 font-medium truncate">
                                     {ep.airdate ?? "Tarih bilinmiyor"} {ep.runtime ? `· ${ep.runtime} dk` : ""}
                                   </p>
                                 </div>

@@ -38,6 +38,23 @@ export default function Dashboard() {
   const [addingId, setAddingId] = useState<number | null>(null);
   const [markingEpisode, setMarkingEpisode] = useState<string | null>(null);
 
+  // List search & sort
+  const [listSearch, setListSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [listSort, setListSort] = useState<"recent" | "alpha" | "progress">("recent");
+
+  // Debounce list search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(listSearch), 250);
+    return () => clearTimeout(t);
+  }, [listSearch]);
+
+  // Reset search when tab changes
+  useEffect(() => {
+    setListSearch("");
+    setDebouncedSearch("");
+  }, [activeTab]);
+
   // Auth check
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -196,7 +213,9 @@ export default function Dashboard() {
       runtime_minutes: runtimeMinutes,
     });
 
-    if (!error) {
+    if (error) {
+      alert("Bölüm işaretlenirken hata oluştu: " + error.message);
+    } else {
       // 2. Determine if show is now completed
       let isNowCompleted = false;
 
@@ -292,9 +311,15 @@ export default function Dashboard() {
           <div className="flex items-center gap-4">
             <Link
               href="/dashboard/stats"
-              className="text-sm font-medium text-zinc-400 hover:text-amber-500 transition-colors"
+              className="text-sm font-medium text-zinc-400 hover:text-amber-500 transition-colors hidden sm:block"
             >
               İstatistikler
+            </Link>
+            <Link
+              href="/dashboard/calendar"
+              className="text-sm font-medium text-zinc-400 hover:text-amber-500 transition-colors"
+            >
+              Takvim
             </Link>
             <div className="w-px h-4 bg-zinc-800 hidden sm:block"></div>
             <span className="text-xs font-medium text-zinc-500 hidden sm:block">{user?.email}</span>
@@ -383,7 +408,8 @@ export default function Dashboard() {
 
         {/* My Shows Section (Cinematic Editorial Redesign) */}
         <section>
-          <div className="border-b border-zinc-800 mb-6 flex gap-6">
+          {/* Tabs */}
+          <div className="border-b border-zinc-800 mb-4 flex gap-6">
             <button
               onClick={() => setActiveTab("watching")}
               className={`pb-3 text-sm font-bold tracking-wide transition-colors ${
@@ -416,13 +442,110 @@ export default function Dashboard() {
             </button>
           </div>
 
-          {myShows.filter(s => s.status === activeTab).length === 0 ? (
-            <div className="py-12 text-zinc-500 text-sm">
-              Bu sekmede henüz dizi bulunmuyor.
+          {/* Search & Sort bar */}
+          {myShows.filter(s => s.status === activeTab).length > 0 && (
+            <div className="flex gap-2 mb-6">
+              {/* Search */}
+              <div className="relative flex-1 max-w-xs">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500 pointer-events-none"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Listende ara..."
+                  value={listSearch}
+                  onChange={(e) => setListSearch(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 rounded-lg pl-8 pr-3 py-2 text-xs focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all"
+                />
+                {listSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setListSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {/* Sort */}
+              <div className="relative">
+                <select
+                  value={listSort}
+                  onChange={(e) => setListSort(e.target.value as "recent" | "alpha" | "progress")}
+                  className="appearance-none bg-zinc-900 border border-zinc-800 text-zinc-400 rounded-lg pl-3 pr-7 py-2 text-xs focus:outline-none focus:border-amber-500/50 transition-all cursor-pointer hover:border-zinc-700"
+                >
+                  <option value="recent">Son eklenen</option>
+                  <option value="alpha">İsme göre (A-Z)</option>
+                  <option value="progress">İlerlemeye göre</option>
+                </select>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500 pointer-events-none"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             </div>
-          ) : (
+          )}
+
+          {/* Compute filtered + sorted list */}
+          {(() => {
+            const tabShows = myShows.filter(s => s.status === activeTab);
+            const filteredShows = tabShows
+              .filter(s => s.show.name.toLowerCase().includes(debouncedSearch.toLowerCase()))
+              .sort((a, b) => {
+                if (listSort === "alpha") return a.show.name.localeCompare(b.show.name, "tr");
+                if (listSort === "progress") {
+                  const aTotal = a.episodes.length || 1;
+                  const bTotal = b.episodes.length || 1;
+                  // Count watched for a and b from their episodes (approximate via nextEpisode index)
+                  const aWatched = a.nextEpisode
+                    ? a.episodes.findIndex(e => e.season === a.nextEpisode!.season && e.number === a.nextEpisode!.number)
+                    : a.isCompleted ? aTotal : 0;
+                  const bWatched = b.nextEpisode
+                    ? b.episodes.findIndex(e => e.season === b.nextEpisode!.season && e.number === b.nextEpisode!.number)
+                    : b.isCompleted ? bTotal : 0;
+                  return (bWatched / bTotal) - (aWatched / aTotal);
+                }
+                return b.lastInteractionDate - a.lastInteractionDate;
+              });
+
+            if (tabShows.length === 0) {
+              return (
+                <div className="py-12 text-zinc-500 text-sm">
+                  Bu sekmede henüz dizi bulunmuyor.
+                </div>
+              );
+            }
+
+            if (filteredShows.length === 0) {
+              return (
+                <div className="py-12">
+                  <p className="text-zinc-500 text-sm">
+                    <span className="text-zinc-300 font-semibold">&ldquo;{debouncedSearch}&rdquo;</span> ile eşleşen dizi bulunamadı.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setListSearch("")}
+                    className="mt-3 text-xs text-amber-500 hover:text-amber-400 transition-colors"
+                  >
+                    Aramayı temizle
+                  </button>
+                </div>
+              );
+            }
+
+            return (
             <div className="grid gap-6">
-              {myShows.filter(s => s.status === activeTab).map((item) => (
+              {filteredShows.map((item) => (
                 <div
                   key={item.id}
                   className="group flex gap-4 sm:gap-6 items-center bg-zinc-900/40 border border-zinc-800/80 p-3 sm:p-4 rounded-xl hover:border-zinc-700 transition-colors relative"
@@ -459,13 +582,13 @@ export default function Dashboard() {
                         TAMAMLANDI
                       </p>
                     ) : item.nextEpisode ? (
-                      <div className="mt-2">
-                        <p className="text-zinc-300 font-medium text-sm sm:text-base">
+                      <div className="mt-2 min-w-0">
+                        <p className="text-zinc-300 font-medium text-sm sm:text-base truncate">
                           <span className="text-zinc-500 font-bold text-xs uppercase tracking-wider mr-2">Sıradaki</span>
                           S{item.nextEpisode.season} E{item.nextEpisode.number} - {item.nextEpisode.name}
                         </p>
                         {item.nextEpisode.airdate && (
-                          <p className="text-xs text-zinc-500 mt-1 font-medium">
+                          <p className="text-xs text-zinc-500 mt-1 font-medium truncate">
                             {new Date(item.nextEpisode.airdate).toLocaleDateString('tr-TR')}
                           </p>
                         )}
@@ -476,18 +599,19 @@ export default function Dashboard() {
                   </div>
 
                   {/* Checkmark Action */}
-                  <div className="flex flex-col items-center gap-3 pr-2">
+                  <div className="flex flex-col items-center gap-2 pr-1 sm:pr-2 relative z-20 shrink-0">
                     {!item.isCompleted && item.nextEpisode && (
                       <button
+                        type="button"
                         onClick={() => handleMarkNextEpisode(item.show.id, item.nextEpisode!)}
                         disabled={markingEpisode === `${item.show.id}-${item.nextEpisode.season}-${item.nextEpisode.number}`}
-                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-zinc-700 text-zinc-700 flex items-center justify-center hover:border-amber-500 hover:text-amber-500 hover:bg-amber-500/10 transition-all duration-300 active:scale-90 disabled:opacity-50"
+                        className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-zinc-700 text-zinc-700 flex items-center justify-center hover:border-amber-500 hover:text-amber-500 hover:bg-amber-500/10 transition-all duration-200 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
                         title="İzlendi olarak işaretle"
                       >
                         {markingEpisode === `${item.show.id}-${item.nextEpisode.season}-${item.nextEpisode.number}` ? (
-                           <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                           <div className="w-5 h-5 sm:w-6 sm:h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin pointer-events-none" />
                         ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                           </svg>
                         )}
@@ -496,15 +620,18 @@ export default function Dashboard() {
 
                     {/* Settings Menu */}
                     <div className="relative group/menu">
-                      <button className="p-2 text-zinc-600 hover:text-zinc-300 transition-colors rounded-full">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <button 
+                        onClick={(e) => e.preventDefault()} 
+                        className="w-12 h-12 flex items-center justify-center text-zinc-600 hover:text-zinc-300 transition-colors rounded-full cursor-pointer"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                           <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                         </svg>
                       </button>
-                      <div className="absolute right-0 top-full mt-1 w-36 bg-zinc-900 border border-zinc-800 rounded shadow-xl opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-20">
+                      <div className="absolute right-0 top-full mt-1 w-40 bg-zinc-900 border border-zinc-800 rounded shadow-xl opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-20">
                         <button
-                          onClick={() => handleRemoveShow(item.id)}
-                          className="w-full text-left px-4 py-2 text-xs font-bold tracking-wide text-rose-500 hover:bg-zinc-800 transition-colors"
+                          onClick={(e) => { e.preventDefault(); handleRemoveShow(item.id); }}
+                          className="w-full text-left px-4 py-3 sm:py-2 text-xs font-bold tracking-wide text-rose-500 hover:bg-zinc-800 transition-colors cursor-pointer"
                         >
                           LİSTEDEN KALDIR
                         </button>
@@ -514,7 +641,8 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-          )}
+            );
+          })()}
         </section>
       </main>
     </div>
