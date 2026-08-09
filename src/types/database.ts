@@ -13,6 +13,8 @@ export interface UserShow {
   user_id: string;
   show_id: string;
   status: ShowStatus;
+  rating: number | null;
+  personal_note: string | null;
   created_at: string;
   // joined from shows table
   show?: Show;

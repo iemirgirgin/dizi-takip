@@ -11,6 +11,7 @@ interface StatsData {
   totalMinutes: number;
   statusCounts: { watching: number; completed: number; dropped: number };
   topShow: { name: string; count: number } | null;
+  topRated: { name: string; image_url: string | null; rating: number }[];
 }
 
 export default function StatsPage() {
@@ -22,6 +23,7 @@ export default function StatsPage() {
     totalMinutes: 0,
     statusCounts: { watching: 0, completed: 0, dropped: 0 },
     topShow: null,
+    topRated: [],
   });
 
   // Auth check
@@ -86,7 +88,23 @@ export default function StatsPage() {
         )[0];
       }
 
-      setStats({ totalEpisodes, totalMinutes, statusCounts, topShow });
+      // 4. Top rated shows
+      const { data: ratedData } = await supabase
+        .from("user_shows")
+        .select("rating, show:shows(name, image_url)")
+        .eq("user_id", user!.id)
+        .eq("status", "completed")
+        .not("rating", "is", null)
+        .order("rating", { ascending: false })
+        .limit(5);
+
+      const topRated = (ratedData ?? []).map((r) => ({
+        name: (r.show as unknown as { name: string; image_url: string | null })?.name ?? "?",
+        image_url: (r.show as unknown as { name: string; image_url: string | null })?.image_url ?? null,
+        rating: r.rating as number,
+      }));
+
+      setStats({ totalEpisodes, totalMinutes, statusCounts, topShow, topRated });
       setLoading(false);
     }
 
@@ -162,7 +180,7 @@ export default function StatsPage() {
         </div>
 
         {/* Status Breakdown */}
-        <section>
+        <section className="mb-12">
           <h2 className="text-lg font-black tracking-widest text-zinc-100 uppercase mb-6 border-b border-zinc-800 pb-2">
             Durum Dağılımı
           </h2>
@@ -187,6 +205,54 @@ export default function StatsPage() {
             </div>
           </div>
         </section>
+
+        {/* Top Rated Shows */}
+        {stats.topRated.length > 0 && (
+          <section>
+            <h2 className="text-lg font-black tracking-widest text-zinc-100 uppercase mb-6 border-b border-zinc-800 pb-2">
+              ★ En Yüksek Puan Verdiklerin
+            </h2>
+            <div className="space-y-px border border-zinc-900 rounded-xl overflow-hidden">
+              {stats.topRated.map((show, idx) => (
+                <div
+                  key={show.name}
+                  className="flex items-center gap-4 px-5 py-3 bg-zinc-950 border-t border-zinc-900/50 hover:bg-zinc-900/40 transition-colors"
+                >
+                  {/* Rank */}
+                  <span className={`text-lg font-black w-6 shrink-0 ${
+                    idx === 0 ? "text-amber-400" :
+                    idx === 1 ? "text-zinc-400" :
+                    idx === 2 ? "text-amber-700" :
+                    "text-zinc-700"
+                  }`}>
+                    {idx + 1}
+                  </span>
+
+                  {/* Poster */}
+                  {show.image_url ? (
+                    <img
+                      src={show.image_url}
+                      alt={show.name}
+                      className="w-9 h-13 object-cover rounded border border-zinc-800 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-9 h-13 bg-zinc-800 rounded border border-zinc-800 shrink-0" />
+                  )}
+
+                  {/* Name */}
+                  <p className="flex-1 font-black tracking-tight text-zinc-100 truncate">
+                    {show.name}
+                  </p>
+
+                  {/* Rating */}
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/15 text-amber-500 text-sm font-black shrink-0">
+                    ★ {show.rating}/10
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );
