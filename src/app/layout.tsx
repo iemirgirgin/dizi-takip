@@ -12,9 +12,24 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+import type { Viewport } from "next";
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0c",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export const metadata: Metadata = {
   title: "Dizi Takip",
   description: "Dizilerinizi ve bölümlerinizi takip edin",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Dizi Takip",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
