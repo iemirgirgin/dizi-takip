@@ -119,3 +119,35 @@ export async function getShowDetails(
     rating: show.rating?.average ?? null,
   };
 }
+
+/**
+ * Get popular shows (paginated) from TVmaze.
+ * TVmaze /shows endpoint returns all shows sorted by ID. To get "popular",
+ * we typically fetch a page and sort by rating/weight, or just use the default.
+ */
+export async function getPopularShows(page: number = 0): Promise<TVmazeShowMapped[]> {
+  const res = await fetch(`${BASE_URL}/shows?page=${page}`);
+  if (!res.ok) {
+    if (res.status === 404) return []; // End of pages
+    throw new Error(`TVmaze API error: ${res.status}`);
+  }
+  const shows: any[] = await res.json();
+  
+  // Sort by rating or weight to simulate "popular" (since /shows returns sequentially)
+  shows.sort((a, b) => {
+    const scoreA = (a.weight || 0) + (a.rating?.average || 0) * 10;
+    const scoreB = (b.weight || 0) + (b.rating?.average || 0) * 10;
+    return scoreB - scoreA;
+  });
+
+  return shows.map(show => ({
+    tvmaze_id: show.id,
+    name: show.name,
+    image_url: show.image?.medium ?? null,
+    summary: show.summary,
+    genres: show.genres ?? [],
+    premiered: show.premiered,
+    status: show.status,
+    rating: show.rating?.average ?? null,
+  }));
+}

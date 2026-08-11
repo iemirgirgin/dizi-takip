@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -175,6 +177,37 @@ export default function SettingsPage() {
               disabled
               className="w-full bg-zinc-950 border border-zinc-800 text-zinc-500 rounded-lg px-4 py-2.5 text-sm cursor-not-allowed"
             />
+          </div>
+        </section>
+
+        {/* Theme Settings */}
+        <section className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <h2 className="text-xs font-black tracking-widest uppercase text-zinc-500">Görünüm</h2>
+          <div className="flex bg-zinc-950 p-1 rounded-lg border border-zinc-800 w-fit">
+            <button
+              onClick={() => setTheme("system")}
+              className={`px-4 py-2 text-sm font-bold rounded-md transition-colors ${
+                theme === "system" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              Sistem
+            </button>
+            <button
+              onClick={() => setTheme("light")}
+              className={`px-4 py-2 text-sm font-bold rounded-md transition-colors ${
+                theme === "light" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              Açık
+            </button>
+            <button
+              onClick={() => setTheme("dark")}
+              className={`px-4 py-2 text-sm font-bold rounded-md transition-colors ${
+                theme === "dark" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              Koyu
+            </button>
           </div>
         </section>
 

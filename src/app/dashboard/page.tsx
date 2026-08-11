@@ -7,11 +7,13 @@ import { supabase } from "@/lib/supabase";
 import {
   searchShows,
   getShowEpisodesFlat,
+  getPopularShows,
   type TVmazeShowMapped,
   type TVmazeEpisode,
 } from "@/lib/tvmaze";
+import { getPopularMovies, searchMovies, type TMDBMovie } from "@/lib/tmdb";
 import type { User } from "@supabase/supabase-js";
-import type { Show, UserShow, ShowStatus, WatchedEpisode } from "@/types/database";
+import type { Show, UserShow, ShowStatus, WatchedEpisode, Movie, UserMovie, MovieStatus } from "@/types/database";
 
 // Extended interface for the dashboard list
 interface DashboardShowItem extends UserShow {
@@ -22,6 +24,12 @@ interface DashboardShowItem extends UserShow {
   episodes: TVmazeEpisode[]; // cache array
 }
 
+// Extended interface for movies
+interface DashboardMovieItem extends UserMovie {
+  movie: Movie;
+  lastInteractionDate: number;
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -30,11 +38,24 @@ export default function Dashboard() {
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<TVmazeShowMapped[]>([]);
+  const [movieSearchResults, setMovieSearchResults] = useState<TMDBMovie[]>([]);
   const [searching, setSearching] = useState(false);
+
+  // Popular Data
+  const [popularShows, setPopularShows] = useState<TVmazeShowMapped[]>([]);
+  const [popularMovies, setPopularMovies] = useState<TMDBMovie[]>([]);
 
   // User's shows list
   const [myShows, setMyShows] = useState<DashboardShowItem[]>([]);
   const [activeTab, setActiveTab] = useState<ShowStatus>("watching");
+  
+  // User's movies list
+  const [myMovies, setMyMovies] = useState<DashboardMovieItem[]>([]);
+  const [activeMovieTab, setActiveMovieTab] = useState<MovieStatus>("plan_to_watch");
+  
+  // View mode
+  const [dashboardTab, setDashboardTab] = useState<"shows" | "movies">("shows");
+
   const [addingId, setAddingId] = useState<number | null>(null);
   const [markingEpisode, setMarkingEpisode] = useState<string | null>(null);
   const [pendingNotes, setPendingNotes] = useState<Record<string, string>>({});
@@ -56,7 +77,7 @@ export default function Dashboard() {
   useEffect(() => {
     setListSearch("");
     setDebouncedSearch("");
-  }, [activeTab]);
+  }, [activeTab, activeMovieTab, dashboardTab]);
 
   // Auth check
   useEffect(() => {
@@ -68,6 +89,23 @@ export default function Dashboard() {
       }
     });
   }, [router]);
+
+  // Fetch popular
+  useEffect(() => {
+    async function fetchPopular() {
+      try {
+        const [pShows, pMovies] = await Promise.all([
+          getPopularShows(1),
+          getPopularMovies(1)
+        ]);
+        setPopularShows(pShows.slice(0, 20));
+        setPopularMovies(pMovies.slice(0, 20));
+      } catch (err) {
+        console.error("Popüler içerik alınamadı", err);
+      }
+    }
+    fetchPopular();
+  }, []);
 
   // Fetch user's shows and calculate next episodes
   const fetchMyShows = useCallback(async () => {
@@ -155,9 +193,30 @@ export default function Dashboard() {
     setLoading(false);
   }, [user]);
 
+  // Fetch user's movies
+  const fetchMyMovies = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("user_movies")
+      .select("*, movie:movies(*)")
+      .eq("user_id", user.id);
+      
+    if (data) {
+      const processed = (data as (UserMovie & { movie: Movie })[]).map((item) => ({
+        ...item,
+        lastInteractionDate: new Date(item.created_at).getTime(),
+      }));
+      processed.sort((a, b) => b.lastInteractionDate - a.lastInteractionDate);
+      setMyMovies(processed);
+    }
+  }, [user]);
+
   useEffect(() => {
-    if (user) fetchMyShows();
-  }, [user, fetchMyShows]);
+    if (user) {
+      fetchMyShows();
+      fetchMyMovies();
+    }
+  }, [user, fetchMyShows, fetchMyMovies]);
 
   // Search handler
   const handleSearch = async (e: React.FormEvent) => {
@@ -165,8 +224,12 @@ export default function Dashboard() {
     if (!searchQuery.trim()) return;
     setSearching(true);
     try {
-      const results = await searchShows(searchQuery);
-      setSearchResults(results);
+      const [showRes, movieRes] = await Promise.all([
+        searchShows(searchQuery),
+        searchMovies(searchQuery)
+      ]);
+      setSearchResults(showRes);
+      setMovieSearchResults(movieRes);
     } catch (err) {
       console.error("Arama hatası:", err);
     }
@@ -277,8 +340,10 @@ export default function Dashboard() {
     setMarkingEpisode(null);
   };
 
-  // Remove show from list
-  const handleRemoveShow = async (userShowId: string) => {
+  // Remove show from list (with confirmation)
+  const handleRemoveShow = async (userShowId: string, showName: string) => {
+    const confirmed = window.confirm(`"${showName}" izleme listenden kaldırılsın mı?`);
+    if (!confirmed) return;
     await supabase.from("user_shows").delete().eq("id", userShowId);
     setMyShows((prev) => prev.filter((s) => s.id !== userShowId));
   };
@@ -329,12 +394,14 @@ export default function Dashboard() {
       <header className="border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded bg-amber-500 flex items-center justify-center text-zinc-950 font-black text-lg">
-              D
-            </div>
-            <h1 className="text-xl font-black tracking-tighter text-zinc-100">
-              DiziTakip
-            </h1>
+            <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <div className="w-8 h-8 rounded bg-amber-500 flex items-center justify-center text-zinc-950 font-black text-lg">
+                D
+              </div>
+              <h1 className="text-xl font-black tracking-tighter text-zinc-100">
+                DiziTakip
+              </h1>
+            </Link>
           </div>
 
           <div className="flex items-center gap-4">
@@ -378,11 +445,29 @@ export default function Dashboard() {
               <input
                 id="search-input"
                 type="text"
-                placeholder="Dizi ara..."
+                placeholder="Dizi veya film ara..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-500 rounded-lg px-4 py-3 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all text-sm"
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (!e.target.value.trim()) {
+                    setSearchResults([]);
+                    setMovieSearchResults([]);
+                  }
+                }}
+                className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-500 rounded-lg px-4 py-3 pr-10 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all text-sm"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(""); setSearchResults([]); setMovieSearchResults([]); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                  aria-label="Aramayı temizle"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
             <button
               type="submit"
@@ -394,8 +479,61 @@ export default function Dashboard() {
           </form>
 
           {/* Search Results */}
-          {searchResults.length > 0 && (
+          {(searchResults.length > 0 || movieSearchResults.length > 0) && (
             <div className="mt-4 border border-zinc-800 rounded-lg bg-zinc-900 overflow-hidden divide-y divide-zinc-800 max-w-xl">
+              {movieSearchResults.length > 0 && (
+                <div className="bg-zinc-800/50 px-4 py-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  FİLMLER
+                </div>
+              )}
+              {movieSearchResults.map((movie) => (
+                <div
+                  key={`movie-${movie.id}`}
+                  className="flex items-center gap-4 p-3 hover:bg-zinc-800/50 transition-colors group"
+                >
+                  {movie.poster_path ? (
+                    <img
+                      src={movie.poster_path?.startsWith("http") ? movie.poster_path : `https://image.tmdb.org/t/p/w185${movie.poster_path}`}
+                      alt={movie.title}
+                      className="w-12 h-16 object-cover rounded shadow-sm border border-zinc-800"
+                    />
+                  ) : (
+                    <div className="w-12 h-16 bg-zinc-800 rounded flex items-center justify-center text-[10px] text-zinc-500">
+                      Yok
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <Link
+                      href={`/dashboard/movie/${movie.id}`}
+                      className="font-black tracking-tight text-zinc-100 hover:text-amber-500 transition-colors line-clamp-1 text-base"
+                    >
+                      {movie.title}
+                    </Link>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {movie.release_date?.slice(0, 4) ?? "?"}
+                    </p>
+                  </div>
+
+                  {myMovies.some((m) => m.movie.tmdb_id === movie.id) ? (
+                    <span className="text-xs font-semibold text-zinc-500 px-3">
+                      LİSTEDE
+                    </span>
+                  ) : (
+                    <Link
+                      href={`/dashboard/movie/${movie.id}`}
+                      className="px-3 py-1.5 rounded bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-zinc-950 text-xs font-bold transition-all"
+                    >
+                      İNCELE
+                    </Link>
+                  )}
+                </div>
+              ))}
+
+              {searchResults.length > 0 && (
+                <div className="bg-zinc-800/50 px-4 py-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  DİZİLER
+                </div>
+              )}
               {searchResults.map((show) => (
                 <div
                   key={show.tvmaze_id}
@@ -441,12 +579,42 @@ export default function Dashboard() {
               ))}
             </div>
           )}
+
         </section>
 
-        {/* My Shows Section (Cinematic Editorial Redesign) */}
+
+
+        {/* My List Section (Cinematic Editorial Redesign) */}
         <section>
-          {/* Tabs */}
-          <div className="border-b border-zinc-800 mb-4 flex gap-6">
+          {/* Main Toggle (Dizilerim / Filmlerim) */}
+          <div className="flex gap-4 mb-8">
+            <button
+              onClick={() => setDashboardTab("shows")}
+              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${
+                dashboardTab === "shows"
+                  ? "bg-amber-500 text-zinc-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+                  : "bg-zinc-900 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 border border-zinc-800"
+              }`}
+            >
+              Dizilerim
+            </button>
+            <button
+              onClick={() => setDashboardTab("movies")}
+              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${
+                dashboardTab === "movies"
+                  ? "bg-amber-500 text-zinc-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+                  : "bg-zinc-900 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 border border-zinc-800"
+              }`}
+            >
+              Filmlerim
+            </button>
+          </div>
+
+          {/* Shows View */}
+          {dashboardTab === "shows" && (
+            <>
+              {/* Tabs */}
+              <div className="border-b border-zinc-800 mb-4 flex gap-6">
             <button
               onClick={() => setActiveTab("watching")}
               className={`pb-3 text-sm font-bold tracking-wide transition-colors ${
@@ -478,9 +646,50 @@ export default function Dashboard() {
               BIRAKILDI <span className="ml-1 opacity-60">({myShows.filter(s => s.status === "dropped").length})</span>
             </button>
           </div>
+            </>
+          )}
+
+          {/* Movies View */}
+          {dashboardTab === "movies" && (
+            <>
+              {/* Tabs */}
+              <div className="border-b border-zinc-800 mb-4 flex gap-6">
+                <button
+                  onClick={() => setActiveMovieTab("plan_to_watch")}
+                  className={`pb-3 text-sm font-bold tracking-wide transition-colors ${
+                    activeMovieTab === "plan_to_watch"
+                      ? "border-b-2 border-amber-500 text-zinc-100"
+                      : "border-b-2 border-transparent text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  İZLENECEK <span className="ml-1 opacity-60">({myMovies.filter(m => m.status === "plan_to_watch").length})</span>
+                </button>
+                <button
+                  onClick={() => setActiveMovieTab("watched")}
+                  className={`pb-3 text-sm font-bold tracking-wide transition-colors ${
+                    activeMovieTab === "watched"
+                      ? "border-b-2 border-amber-500 text-zinc-100"
+                      : "border-b-2 border-transparent text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  İZLENDİ <span className="ml-1 opacity-60">({myMovies.filter(m => m.status === "watched").length})</span>
+                </button>
+                <button
+                  onClick={() => setActiveMovieTab("dropped")}
+                  className={`pb-3 text-sm font-bold tracking-wide transition-colors ${
+                    activeMovieTab === "dropped"
+                      ? "border-b-2 border-amber-500 text-zinc-100"
+                      : "border-b-2 border-transparent text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  BIRAKILDI <span className="ml-1 opacity-60">({myMovies.filter(m => m.status === "dropped").length})</span>
+                </button>
+              </div>
+            </>
+          )}
 
           {/* Search & Sort bar */}
-          {myShows.filter(s => s.status === activeTab).length > 0 && (
+          {(dashboardTab === "shows" ? myShows.filter(s => s.status === activeTab).length > 0 : myMovies.filter(m => m.status === activeMovieTab).length > 0) && (
             <div className="flex gap-2 mb-6">
               {/* Search */}
               <div className="relative flex-1 max-w-xs">
@@ -533,8 +742,8 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Compute filtered + sorted list */}
-          {(() => {
+          {/* Compute filtered + sorted list for SHOWS */}
+          {dashboardTab === "shows" && (() => {
             const tabShows = myShows.filter(s => s.status === activeTab);
             const filteredShows = tabShows
               .filter(s => s.show.name.toLowerCase().includes(debouncedSearch.toLowerCase()))
@@ -632,7 +841,7 @@ export default function Dashboard() {
                               <button
                                 key={n}
                                 type="button"
-                                onClick={() => handleRating(item.id, n)}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRating(item.id, n); }}
                                 className={`w-7 h-7 rounded text-xs font-bold transition-all ${
                                   item.rating === n
                                     ? "bg-amber-500 text-zinc-950"
@@ -645,7 +854,7 @@ export default function Dashboard() {
                             {item.rating && (
                               <button
                                 type="button"
-                                onClick={() => handleRating(item.id, 0)}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRating(item.id, 0); }}
                                 title="Puanı kaldır"
                                 className="w-7 h-7 rounded text-xs border border-zinc-800 text-zinc-700 hover:border-rose-500 hover:text-rose-500 transition-all"
                               >
@@ -672,9 +881,9 @@ export default function Dashboard() {
                             : false) && (
                             <button
                               type="button"
-                              onClick={() => handleSaveNote(item.id)}
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSaveNote(item.id); }}
                               disabled={savingNote === item.id}
-                              className="mt-1.5 text-xs font-bold text-amber-500 hover:text-amber-400 transition-colors disabled:opacity-50"
+                              className="mt-1.5 text-xs font-bold text-amber-500 hover:text-amber-400 transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {savingNote === item.id ? "Kaydediliyor..." : "Kaydet"}
                             </button>
@@ -708,10 +917,11 @@ export default function Dashboard() {
                     {!item.isCompleted && item.nextEpisode && (
                       <button
                         type="button"
-                        onClick={() => handleMarkNextEpisode(item.show.id, item.nextEpisode!)}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleMarkNextEpisode(item.show.id, item.nextEpisode!); }}
                         disabled={markingEpisode === `${item.show.id}-${item.nextEpisode.season}-${item.nextEpisode.number}`}
-                        className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-zinc-700 text-zinc-700 flex items-center justify-center hover:border-amber-500 hover:text-amber-500 hover:bg-amber-500/10 transition-all duration-200 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                        className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-amber-500 text-amber-500 flex items-center justify-center hover:bg-amber-500/10 active:bg-amber-500 active:text-zinc-950 transition-all duration-200 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
                         title="İzlendi olarak işaretle"
+                        style={{ WebkitTapHighlightColor: "transparent" }}
                       >
                         {markingEpisode === `${item.show.id}-${item.nextEpisode.season}-${item.nextEpisode.number}` ? (
                            <div className="w-5 h-5 sm:w-6 sm:h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin pointer-events-none" />
@@ -735,7 +945,7 @@ export default function Dashboard() {
                       </button>
                       <div className="absolute right-0 top-full mt-1 w-40 bg-zinc-900 border border-zinc-800 rounded shadow-xl opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-20">
                         <button
-                          onClick={(e) => { e.preventDefault(); handleRemoveShow(item.id); }}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemoveShow(item.id, item.show.name); }}
                           className="w-full text-left px-4 py-3 sm:py-2 text-xs font-bold tracking-wide text-rose-500 hover:bg-zinc-800 transition-colors cursor-pointer"
                         >
                           LİSTEDEN KALDIR
@@ -748,7 +958,130 @@ export default function Dashboard() {
             </div>
             );
           })()}
+
+          {/* Compute filtered + sorted list for MOVIES */}
+          {dashboardTab === "movies" && (() => {
+            const tabMovies = myMovies.filter(m => m.status === activeMovieTab);
+            const filteredMovies = tabMovies
+              .filter(m => m.movie.title.toLowerCase().includes(debouncedSearch.toLowerCase()))
+              .sort((a, b) => {
+                if (listSort === "alpha") return a.movie.title.localeCompare(b.movie.title, "tr");
+                return b.lastInteractionDate - a.lastInteractionDate;
+              });
+
+            if (tabMovies.length === 0) {
+              return (
+                <div className="py-12 text-zinc-500 text-sm">
+                  Bu sekmede henüz film bulunmuyor.
+                </div>
+              );
+            }
+
+            if (filteredMovies.length === 0) {
+              return (
+                <div className="py-12">
+                  <p className="text-zinc-500 text-sm">
+                    <span className="text-zinc-300 font-semibold">&ldquo;{debouncedSearch}&rdquo;</span> ile eşleşen film bulunamadı.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setListSearch("")}
+                    className="mt-3 text-xs text-amber-500 hover:text-amber-400 transition-colors"
+                  >
+                    Aramayı temizle
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <div className="grid gap-6">
+                {filteredMovies.map((item) => (
+                  <div
+                    key={item.id}
+                    className="group flex gap-4 sm:gap-6 items-center bg-zinc-900/40 border border-zinc-800/80 p-3 sm:p-4 rounded-xl hover:border-zinc-700 transition-colors relative"
+                  >
+                    <Link
+                      href={`/dashboard/movie/${item.movie.tmdb_id}`}
+                      className="w-24 h-36 sm:w-32 sm:h-48 flex-shrink-0 relative overflow-hidden rounded-md bg-zinc-800 border border-zinc-700/50 block"
+                    >
+                      {item.movie.poster_path ? (
+                        <img
+                          src={item.movie.poster_path?.startsWith("http") ? item.movie.poster_path : `https://image.tmdb.org/t/p/w342${item.movie.poster_path}`}
+                          alt={item.movie.title}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-500">
+                          YOK
+                        </div>
+                      )}
+                    </Link>
+                    
+                    <div className="flex-1 min-w-0 py-2 flex flex-col justify-center">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <Link
+                          href={`/dashboard/movie/${item.movie.tmdb_id}`}
+                          className="font-black text-2xl sm:text-3xl tracking-tighter text-zinc-100 hover:text-amber-500 transition-colors truncate"
+                        >
+                          {item.movie.title}
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </section>
+
+        {/* Popular Shows Section */}
+        {popularShows.length > 0 && (
+          <section className="mt-16 mb-12">
+            <div className="flex justify-between items-end mb-4">
+              <h2 className="text-xl font-black tracking-tight text-zinc-100 uppercase">En Popüler 250 Dizi</h2>
+              <Link href="/dashboard/popular-shows" className="text-xs font-bold text-amber-500 hover:text-amber-400">Tümünü Gör</Link>
+            </div>
+            <div className="flex overflow-x-auto gap-4 pb-4 snap-x scrollbar-hide">
+              {popularShows.map(show => (
+                <Link key={show.tvmaze_id} href={`/dashboard/show/${show.tvmaze_id}`} className="snap-start shrink-0 w-32 group">
+                  <div className="w-32 h-48 bg-zinc-900 rounded overflow-hidden relative border border-zinc-800 group-hover:border-amber-500/50 transition-colors shadow-lg">
+                    {show.image_url ? (
+                      <img src={show.image_url} alt={show.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs text-zinc-600">YOK</div>
+                    )}
+                  </div>
+                  <p className="mt-2 text-sm font-bold text-zinc-300 truncate group-hover:text-amber-500 transition-colors">{show.name}</p>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Popular Movies Section */}
+        {popularMovies.length > 0 && (
+          <section className="mb-12">
+            <div className="flex justify-between items-end mb-4">
+              <h2 className="text-xl font-black tracking-tight text-zinc-100 uppercase">En Popüler 250 Film</h2>
+              <Link href="/dashboard/popular-movies" className="text-xs font-bold text-amber-500 hover:text-amber-400">Tümünü Gör</Link>
+            </div>
+            <div className="flex overflow-x-auto gap-4 pb-4 snap-x scrollbar-hide">
+              {popularMovies.map(movie => (
+                <Link key={movie.id} href={`/dashboard/movie/${movie.id}`} className="snap-start shrink-0 w-32 group">
+                  <div className="w-32 h-48 bg-zinc-900 rounded overflow-hidden relative border border-zinc-800 group-hover:border-amber-500/50 transition-colors shadow-lg">
+                    {movie.poster_path ? (
+                      <img src={movie.poster_path?.startsWith("http") ? movie.poster_path : `https://image.tmdb.org/t/p/w342${movie.poster_path}`} alt={movie.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs text-zinc-600">YOK</div>
+                    )}
+                  </div>
+                  <p className="mt-2 text-sm font-bold text-zinc-300 truncate group-hover:text-amber-500 transition-colors">{movie.title}</p>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

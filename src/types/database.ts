@@ -1,4 +1,5 @@
 export type ShowStatus = "watching" | "completed" | "dropped";
+export type MovieStatus = "plan_to_watch" | "watched" | "dropped";
 
 export interface Profile {
   id: string;
@@ -25,6 +26,26 @@ export interface UserShow {
   created_at: string;
   // joined from shows table
   show?: Show;
+}
+
+export interface Movie {
+  id: string;
+  tmdb_id: number;
+  title: string;
+  poster_path: string | null;
+  created_at: string;
+}
+
+export interface UserMovie {
+  id: string;
+  user_id: string;
+  movie_id: string;
+  status: MovieStatus;
+  rating: number | null;
+  personal_note: string | null;
+  created_at: string;
+  // joined from movies table
+  movie?: Movie;
 }
 
 export interface WatchedEpisode {

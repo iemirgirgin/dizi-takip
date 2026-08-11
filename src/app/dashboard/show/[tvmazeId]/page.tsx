@@ -24,6 +24,8 @@ export default function ShowDetailPage() {
   const [openSeason, setOpenSeason] = useState<number | null>(null);
   const [togglingEp, setTogglingEp] = useState<string | null>(null);
   const [showDbId, setShowDbId] = useState<string | null>(null);
+  const [translatedSummary, setTranslatedSummary] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
 
   // Helper: create a key for an episode
   const epKey = (season: number, episode: number) => `${season}-${episode}`;
@@ -55,6 +57,25 @@ export default function ShowDetailPage() {
         // Auto-open first season
         const firstSeason = Math.min(...episodes.keys());
         setOpenSeason(firstSeason);
+
+        // Translate summary if needed
+        if (details.summary) {
+          const stripped = details.summary.replace(/<[^>]*>/g, "");
+          const lang = navigator.language.split("-")[0] || "tr";
+          if (lang !== "en") {
+            setTranslating(true);
+            try {
+              const transRes = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(stripped)}&langpair=en|${lang}`);
+              const transData = await transRes.json();
+              if (transData?.responseData?.translatedText) {
+                setTranslatedSummary(transData.responseData.translatedText);
+              }
+            } catch (err) {
+              console.error("Translation error", err);
+            }
+            setTranslating(false);
+          }
+        }
       } catch (err) {
         console.error("Dizi verisi alınamadı:", err);
       }
@@ -300,7 +321,14 @@ export default function ShowDetailPage() {
                 {/* Summary */}
                 {show.summary && (
                   <p className="text-sm text-zinc-400 leading-relaxed line-clamp-4 hover:line-clamp-none transition-all duration-300 mb-8 border-l-2 border-amber-500/50 pl-4">
-                    {stripHtml(show.summary)}
+                    {translating ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-3 h-3 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                        Çevriliyor...
+                      </span>
+                    ) : (
+                      translatedSummary || stripHtml(show.summary)
+                    )}
                   </p>
                 )}
               </div>
