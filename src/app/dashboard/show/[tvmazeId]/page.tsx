@@ -376,7 +376,7 @@ export default function ShowDetailPage() {
                 >
                   {/* Season header */}
                   <button
-                    onClick={() => setOpenSeason(isOpen ? null : seasonNum)}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpenSeason(isOpen ? null : seasonNum); }}
                     className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-zinc-800/50 transition-colors text-left group cursor-pointer touch-manipulation"
                   >
                     <div className="flex items-center gap-4">
@@ -410,7 +410,7 @@ export default function ShowDetailPage() {
                             Kalan: {episodes.length - seasonWatched} bölüm
                           </span>
                           <button
-                            onClick={() => markSeasonWatched(seasonNum)}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); markSeasonWatched(seasonNum); }}
                             className="inline-flex items-center justify-center gap-1.5 px-4 min-h-[44px] rounded text-xs font-bold tracking-wide text-amber-500 hover:bg-amber-500/10 transition-colors cursor-pointer ml-auto touch-manipulation"
                           >
                             TÜM SEZONU İŞARETLE
@@ -433,7 +433,7 @@ export default function ShowDetailPage() {
                                 }`}
                               >
                                 <button
-                                  onClick={() => toggleEpisode(ep.season, ep.number)}
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleEpisode(ep.season, ep.number); }}
                                   disabled={isToggling}
                                   className="relative w-12 h-12 flex items-center justify-center flex-shrink-0 cursor-pointer group/btn"
                                 >
